@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: c2l_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: code2learn
+      POSTGRES_USER: c2l_user
+      POSTGRES_PASSWORD: c2l_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - c2l_network
+
+  piston:
+    image: ghcr.io/engineer-man/piston
+    container_name: c2l_piston
+    restart: unless-stopped
+    ports:
+      - "2000:2000"
+    volumes:
+      - piston_data:/piston/packages
+    networks:
+      - c2l_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: c2l_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://c2l_user:c2l_password@postgres:5432/code2learn
+      SECRET_KEY: c2l-jwt-super-secret-key-production-ready-token-auth-2026
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 120
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      PISTON_URL: http://piston:2000/api/v2
+    ports:
+      - "8000:8000"
+    depends_on:
+      - postgres
+      - piston
+    networks:
+      - c2l_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: c2l_frontend
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - c2l_network
+
+networks:
+  c2l_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  piston_data:
