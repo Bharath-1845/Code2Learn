@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { challengeApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import confetti from 'canvas-confetti';
 import { Swords, Shield, Heart, Zap, Play, CheckCircle2, ArrowRight } from 'lucide-react';
 
@@ -11,6 +12,7 @@ export default function BossBattlePage() {
   const params = useParams();
   const router = useRouter();
   const worldId = params.worldId as string;
+  const { addXp } = useAuth();
 
   const [boss, setBoss] = useState<any>(null);
   const [currentStage, setCurrentStage] = useState(0);
@@ -77,7 +79,10 @@ export default function BossBattlePage() {
             spread: 90,
             origin: { y: 0.5 }
           });
-          await challengeApi.submitBossBattle(boss.id, true);
+          const res = await challengeApi.submitBossBattle(boss.id, true);
+          if (res?.xp_earned && res.xp_earned > 0) {
+            addXp(res.xp_earned, res.new_level);
+          }
         }
       } else {
         setErrorMsg(`Expected '${expected}', but got '${actual}'. Try tweaking your code!`);

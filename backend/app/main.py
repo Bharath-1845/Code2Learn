@@ -6,6 +6,14 @@ from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.seed.seed_data import seed_database
 
+try:
+    from create_demo_user import create_demo_users
+except ImportError:
+    try:
+        from backend.create_demo_user import create_demo_users
+    except ImportError:
+        create_demo_users = None
+
 # Import routers
 from app.routers import auth, curriculum, challenges, assessments, progress, ai, admin
 
@@ -19,6 +27,13 @@ async def lifespan(app: FastAPI):
     # Seed data
     async with AsyncSessionLocal() as session:
         await seed_database(session)
+
+    # Ensure demo accounts exist
+    if create_demo_users:
+        try:
+            await create_demo_users()
+        except Exception as e:
+            print(f"Demo user init info: {e}")
 
     yield
 

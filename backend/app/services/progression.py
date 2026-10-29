@@ -117,14 +117,14 @@ async def check_and_apply_topic_mastery(
     """
     prog = await get_or_create_topic_progress(db, user_id, topic_id)
     
-    # Mastery condition: all parts completed and assessment >= 70%
+    # Strict Mastery condition: User MUST complete lesson, practice, game, coding challenge, AND pass assessment >= 70%
     is_ready = (
         prog.lesson_completed and
         prog.practice_completed and
         prog.game_completed and
         prog.challenge_completed and
         prog.assessment_completed and
-        prog.assessment_score >= 0.70
+        (prog.assessment_score or 0.0) >= 0.70
     )
 
     if not is_ready:
@@ -135,6 +135,9 @@ async def check_and_apply_topic_mastery(
         prog.is_mastered = True
         prog.mastered_at = datetime.now(timezone.utc)
         just_became_mastered = True
+
+    # Flush changes to the current database transaction
+    await db.flush()
 
     # Find current topic and world
     topic_res = await db.execute(select(Topic).where(Topic.id == topic_id))
@@ -156,66 +159,96 @@ async def check_and_apply_topic_mastery(
 
     if next_topic:
         next_topic_id = next_topic.id
-        # Ensure progress row exists
+        # Ensure progress row exists for next topic
         await get_or_create_topic_progress(db, user_id, next_topic.id)
-    else:
-        # All topics in current world mastered! Check if world can be completed
-        world_topics_res = await db.execute(select(Topic).where(Topic.world_id == topic.world_id))
-        all_topics = world_topics_res.scalars().all()
-        topic_ids = [t.id for t in all_topics]
 
-        user_progs_res = await db.execute(
-            select(UserTopicProgress).where(
-                and_(
-                    UserTopicProgress.user_id == user_id,
-                    UserTopicProgress.topic_id.in_(topic_ids),
-                    UserTopicProgress.is_mastered == True
-                )
+    # Check if all topics in current world are mastered
+    world_topics_res = await db.execute(select(Topic).where(Topic.world_id == topic.world_id))
+    all_topics = world_topics_res.scalars().all()
+    topic_ids = [t.id for t in all_topics]
+
+    user_progs_res = await db.execute(
+        select(UserTopicProgress).where(
+            and_(
+                UserTopicProgress.user_id == user_id,
+                UserTopicProgress.topic_id.in_(topic_ids)
             )
         )
-        mastered_count = len(user_progs_res.scalars().all())
+    )
+    user_progs = user_progs_res.scalars().all()
+    mastered_topic_ids = {p.topic_id for p in user_progs if p.is_mastered}
+    mastered_topic_ids.add(topic_id)  # Current topic is confirmed mastered
 
-        if mastered_count >= len(all_topics):
-            # Unlock next world
-            world_res = await db.execute(select(World).where(World.id == topic.world_id))
-            curr_world = world_res.scalar_one_or_none()
-            if curr_world:
-                # Mark current world as completed
-                curr_w_prog_res = await db.execute(
+    all_world_topics_mastered = all(tid in mastered_topic_ids for tid in topic_ids)
+
+    if all_world_topics_mastered:
+        # Mark current world as completed and unlocked
+        curr_w_prog_res = await db.execute(
+            select(UserWorldProgress).where(
+                and_(UserWorldProgress.user_id == user_id, UserWorldProgress.world_id == topic.world_id)
+            )
+        )
+        curr_w_prog = curr_w_prog_res.scalar_one_or_none()
+        if not curr_w_prog:
+            curr_w_prog = UserWorldProgress(
+                user_id=user_id,
+                world_id=topic.world_id,
+                is_unlocked=True,
+                is_completed=True,
+                boss_defeated=False
+            )
+            db.add(curr_w_prog)
+        else:
+            curr_w_prog.is_unlocked = True
+            curr_w_prog.is_completed = True
+
+        # Find next world in the same mode
+        world_res = await db.execute(select(World).where(World.id == topic.world_id))
+        curr_world = world_res.scalar_one_or_none()
+        if curr_world:
+            next_w_res = await db.execute(
+                select(World).where(
+                    and_(World.mode_id == curr_world.mode_id, World.order_index > curr_world.order_index)
+                ).order_by(World.order_index).limit(1)
+            )
+            next_world = next_w_res.scalar_one_or_none()
+            if next_world:
+                next_world_id = next_world.id
+                nw_prog_res = await db.execute(
                     select(UserWorldProgress).where(
-                        and_(UserWorldProgress.user_id == user_id, UserWorldProgress.world_id == curr_world.id)
+                        and_(UserWorldProgress.user_id == user_id, UserWorldProgress.world_id == next_world.id)
                     )
                 )
-                curr_w_prog = curr_w_prog_res.scalar_one_or_none()
-                if curr_w_prog:
-                    curr_w_prog.is_completed = True
+                nw_prog = nw_prog_res.scalar_one_or_none()
+                if not nw_prog:
+                    nw_prog = UserWorldProgress(
+                        user_id=user_id,
+                        world_id=next_world.id,
+                        is_unlocked=True,
+                        is_completed=False,
+                        boss_defeated=False
+                    )
+                    db.add(nw_prog)
+                else:
+                    nw_prog.is_unlocked = True
 
-                # Find next world
-                next_w_res = await db.execute(
-                    select(World).where(
-                        and_(World.mode_id == curr_world.mode_id, World.order_index > curr_world.order_index)
-                    ).order_by(World.order_index).limit(1)
+                # Ensure first topic of next world exists and has progress initialized
+                first_topic_next_w_res = await db.execute(
+                    select(Topic).where(Topic.world_id == next_world.id).order_by(Topic.order_index).limit(1)
                 )
-                next_world = next_w_res.scalar_one_or_none()
-                if next_world:
-                    next_world_id = next_world.id
-                    nw_prog_res = await db.execute(
-                        select(UserWorldProgress).where(
-                            and_(UserWorldProgress.user_id == user_id, UserWorldProgress.world_id == next_world.id)
-                        )
-                    )
-                    nw_prog = nw_prog_res.scalar_one_or_none()
-                    if not nw_prog:
-                        nw_prog = UserWorldProgress(
-                            user_id=user_id,
-                            world_id=next_world.id,
-                            is_unlocked=True,
-                            is_completed=False,
-                            boss_defeated=False
-                        )
-                        db.add(nw_prog)
-                    else:
-                        nw_prog.is_unlocked = True
+                first_topic_next_w = first_topic_next_w_res.scalar_one_or_none()
+                if first_topic_next_w:
+                    await get_or_create_topic_progress(db, user_id, first_topic_next_w.id)
+                    if not next_topic_id:
+                        next_topic_id = first_topic_next_w.id
+
+                # Update UserProfile to point to next world
+                profile_res = await db.execute(select(UserProfile).where(UserProfile.user_id == user_id))
+                profile = profile_res.scalar_one_or_none()
+                if profile:
+                    profile.current_world_id = next_world.id
+                    if first_topic_next_w:
+                        profile.current_topic_id = first_topic_next_w.id
 
     await db.commit()
     return prog.is_mastered, next_topic_id, next_world_id

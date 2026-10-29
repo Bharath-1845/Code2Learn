@@ -21,7 +21,7 @@ from app.schemas.challenge import (
     GameSubmit,
     BossBattleOut
 )
-from app.routers.deps import get_current_user
+from app.routers.deps import get_current_user, get_current_user_optional
 from app.services.sandbox import execute_python_code
 from app.services.progression import award_xp, get_or_create_topic_progress, check_and_apply_topic_mastery, check_achievements
 
@@ -29,12 +29,25 @@ router = APIRouter(prefix="/challenges", tags=["challenges"])
 
 
 @router.get("/topic/{topic_id}", response_model=CodingChallengeOut)
-async def get_challenge_for_topic(topic_id: str, db: AsyncSession = Depends(get_db)):
+async def get_challenge_for_topic(
+    topic_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
     stmt = select(CodingChallenge).where(CodingChallenge.topic_id == topic_id)
     res = await db.execute(stmt)
     challenge = res.scalar_one_or_none()
     if not challenge:
         raise HTTPException(status_code=404, detail="Coding challenge not found for this topic")
+
+    # Strict prerequisite: Game must be completed before coding challenge
+    if current_user:
+        prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
+        if not prog.game_completed:
+            raise HTTPException(
+                status_code=403,
+                detail="You must complete the interactive game arena before starting the coding challenge."
+            )
 
     tc_res = await db.execute(select(TestCase).where(TestCase.challenge_id == challenge.id))
     test_cases = tc_res.scalars().all()
@@ -86,6 +99,14 @@ async def submit_challenge(
     challenge = res.scalar_one_or_none()
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
+
+    # Strict prerequisite: Game must be completed before submitting challenge
+    prog = await get_or_create_topic_progress(db, current_user.id, challenge.topic_id)
+    if not prog.game_completed:
+        raise HTTPException(
+            status_code=403,
+            detail="You must complete the interactive game arena before submitting the coding challenge."
+        )
 
     tc_res = await db.execute(select(TestCase).where(TestCase.challenge_id == challenge.id))
     test_cases = tc_res.scalars().all()
@@ -162,14 +183,16 @@ async def submit_challenge(
         prog = await get_or_create_topic_progress(db, current_user.id, challenge.topic_id)
         if not prog.challenge_completed:
             prog.challenge_completed = True
-            xp_earned = challenge.xp_reward
-            prog.xp_earned += xp_earned
-            await db.commit()
+            xp_earned = challenge.xp_reward or 100
+        else:
+            xp_earned = 25  # Re-solve practice bonus
+        prog.xp_earned += xp_earned
+        await db.commit()
 
-            new_total_xp, new_level, _, level_up = await award_xp(db, current_user.id, xp_earned)
-            # Check mastery
-            topic_mastered, _, _ = await check_and_apply_topic_mastery(db, current_user.id, challenge.topic_id)
-            await check_achievements(db, current_user.id)
+        new_total_xp, new_level, _, level_up = await award_xp(db, current_user.id, xp_earned)
+        # Check mastery
+        topic_mastered, _, _ = await check_and_apply_topic_mastery(db, current_user.id, challenge.topic_id)
+        await check_achievements(db, current_user.id)
 
     return ChallengeSubmitResult(
         passed=all_passed,
@@ -188,12 +211,25 @@ async def submit_challenge(
 
 # Games router
 @router.get("/game/{topic_id}", response_model=GameOut)
-async def get_game_for_topic(topic_id: str, db: AsyncSession = Depends(get_db)):
+async def get_game_for_topic(
+    topic_id: str,
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
     stmt = select(Game).where(Game.topic_id == topic_id)
     res = await db.execute(stmt)
     game = res.scalar_one_or_none()
     if not game:
         raise HTTPException(status_code=404, detail="Game not found for this topic")
+
+    # Strict prerequisite: Lesson and mini-practice must be completed
+    if current_user:
+        prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
+        if not (prog.lesson_completed and prog.practice_completed):
+            raise HTTPException(
+                status_code=403,
+                detail="You must complete the lesson and mini-practice check before playing the game."
+            )
 
     config_data = json.loads(game.config_json)
     return GameOut(
@@ -221,16 +257,27 @@ async def submit_game(
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
 
+    # Strict prerequisite: Lesson and mini-practice must be completed
+    prog = await get_or_create_topic_progress(db, current_user.id, game.topic_id)
+    if not (prog.lesson_completed and prog.practice_completed):
+        raise HTTPException(
+            status_code=403,
+            detail="You must complete the lesson and mini-practice check before playing the game."
+        )
+
     xp_earned = 0
     if data.completed and data.score >= 0.6:
         prog = await get_or_create_topic_progress(db, current_user.id, game.topic_id)
         if not prog.game_completed:
             prog.game_completed = True
-            xp_earned = game.xp_reward
-            prog.xp_earned += xp_earned
-            await db.commit()
-            await award_xp(db, current_user.id, xp_earned)
-            await check_achievements(db, current_user.id)
+            xp_earned = game.xp_reward or 50
+        else:
+            xp_earned = 15  # Repeat gameplay practice bonus
+        prog.xp_earned += xp_earned
+        await db.commit()
+        await award_xp(db, current_user.id, xp_earned)
+        await check_and_apply_topic_mastery(db, current_user.id, game.topic_id)
+        await check_achievements(db, current_user.id)
 
     return {
         "status": "success",
@@ -289,12 +336,26 @@ async def submit_boss_battle(
             )
         )
         wp = w_res.scalar_one_or_none()
-        if wp and not wp.boss_defeated:
+        if not wp:
+            wp = UserWorldProgress(
+                user_id=current_user.id,
+                world_id=boss.world_id,
+                is_unlocked=True,
+                is_completed=True,
+                boss_defeated=True
+            )
+            db.add(wp)
+            xp_earned = boss.xp_reward
+            new_total_xp, new_level, _, level_up = await award_xp(db, current_user.id, xp_earned)
+            await check_achievements(db, current_user.id)
+        elif not wp.boss_defeated:
             wp.boss_defeated = True
             wp.is_completed = True
             xp_earned = boss.xp_reward
             new_total_xp, new_level, _, level_up = await award_xp(db, current_user.id, xp_earned)
             await check_achievements(db, current_user.id)
+        
+        await db.commit()
 
     return {
         "passed": passed,

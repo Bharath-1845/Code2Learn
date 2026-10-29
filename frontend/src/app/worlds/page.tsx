@@ -134,16 +134,27 @@ export default function WorldsPage() {
 
                 {/* Right Action */}
                 <div>
-                  {isUnlocked ? (
-                    <Link
-                      href={`/learn/${world.topics[0]?.id || ''}`}
-                      className="btn-primary"
-                      style={{ padding: '10px 20px', fontSize: '0.9rem' }}
-                    >
-                      <span>Enter World</span>
-                      <ChevronRight size={16} />
-                    </Link>
-                  ) : (
+                  {isUnlocked ? (() => {
+                    const t = world.topics[0];
+                    let resumeHref = `/learn/${t?.id || ''}`;
+                    if (t?.lesson_completed && t?.practice_completed && !t?.game_completed) {
+                      resumeHref = `/game/${t.id}`;
+                    } else if (t?.game_completed && !t?.challenge_completed) {
+                      resumeHref = `/code/${t.id}`;
+                    } else if (t?.challenge_completed && !t?.assessment_completed) {
+                      resumeHref = `/assess/${t.id}`;
+                    }
+                    return (
+                      <Link
+                        href={resumeHref}
+                        className="btn-primary"
+                        style={{ padding: '10px 20px', fontSize: '0.9rem' }}
+                      >
+                        <span>Enter World</span>
+                        <ChevronRight size={16} />
+                      </Link>
+                    );
+                  })() : (
                     <button
                       disabled
                       className="btn-secondary"
@@ -157,139 +168,266 @@ export default function WorldsPage() {
               </div>
 
               {/* Topics Breakdown Bar */}
-              {world.topics && world.topics.length > 0 && isUnlocked && (
-                <div style={{
-                  marginTop: '22px',
-                  paddingTop: '18px',
-                  borderTop: '1px solid var(--border-subtle)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  flexWrap: 'wrap',
-                  gap: '12px'
-                }}>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                    Core Topic: <strong style={{ color: 'var(--text-main)' }}>{world.topics[0]?.title}</strong>
-                  </div>
+              {world.topics && world.topics.length > 0 && isUnlocked && (() => {
+                const t = world.topics[0];
+                const isLessonDone = Boolean(t.lesson_completed && t.practice_completed);
+                const isGameUnlocked = isLessonDone;
+                const isChallengeUnlocked = Boolean(t.game_completed);
+                const isAssessmentUnlocked = Boolean(t.challenge_completed);
 
-                  {/* Fast Action Links for Topic */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <Link
-                      href={`/learn/${world.topics[0]?.id}`}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'var(--bg-muted)',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      📚 Lesson
-                    </Link>
-                    <Link
-                      href={`/game/${world.topics[0]?.id}`}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'rgba(99, 102, 241, 0.1)',
-                        color: 'var(--color-primary)',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      🎮 Play Game
-                    </Link>
-                    <Link
-                      href={`/code/${world.topics[0]?.id}`}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'rgba(16, 185, 129, 0.1)',
-                        color: 'var(--color-accent-green)',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      💻 Coding Challenge
-                    </Link>
-                    <Link
-                      href={`/assess/${world.topics[0]?.id}`}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: 'var(--radius-sm)',
-                        background: 'rgba(245, 158, 11, 0.1)',
-                        color: 'var(--color-accent-gold)',
-                        fontSize: '0.8rem',
-                        fontWeight: 600
-                      }}
-                    >
-                      🧠 Assessment
-                    </Link>
+                return (
+                  <div style={{
+                    marginTop: '22px',
+                    paddingTop: '18px',
+                    borderTop: '1px solid var(--border-subtle)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                      Core Topic: <strong style={{ color: 'var(--text-main)' }}>{t.title}</strong>
+                    </div>
+
+                    {/* Step-by-Step Sequenced Links for Topic */}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+                      {/* Step 1: Lesson */}
+                      <Link
+                        href={`/learn/${t.id}`}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 'var(--radius-sm)',
+                          background: isLessonDone ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-muted)',
+                          color: isLessonDone ? 'var(--color-accent-green)' : 'var(--text-main)',
+                          fontSize: '0.8rem',
+                          fontWeight: 600,
+                          border: isLessonDone ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid var(--border-subtle)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        {isLessonDone ? <CheckCircle size={12} /> : null}
+                        <span>{isLessonDone ? 'Lesson' : '📚 Lesson'}</span>
+                      </Link>
+
+                      {/* Step 2: Play Game */}
+                      {isGameUnlocked ? (
+                        <Link
+                          href={`/game/${t.id}`}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: t.game_completed ? 'rgba(16, 185, 129, 0.15)' : 'rgba(99, 102, 241, 0.1)',
+                            color: t.game_completed ? 'var(--color-accent-green)' : 'var(--color-primary)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            border: t.game_completed ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(99, 102, 241, 0.3)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {t.game_completed ? <CheckCircle size={12} /> : null}
+                          <span>{t.game_completed ? 'Play Game' : '🎮 Play Game'}</span>
+                        </Link>
+                      ) : (
+                        <span
+                          title="Complete Lesson & Practice first to unlock"
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg-muted)',
+                            color: 'var(--text-muted)',
+                            opacity: 0.5,
+                            cursor: 'not-allowed',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid var(--border-subtle)'
+                          }}
+                        >
+                          <Lock size={12} />
+                          <span>Play Game</span>
+                        </span>
+                      )}
+
+                      {/* Step 3: Coding Challenge */}
+                      {isChallengeUnlocked ? (
+                        <Link
+                          href={`/code/${t.id}`}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: t.challenge_completed ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.1)',
+                            color: 'var(--color-accent-green)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            border: '1px solid rgba(16, 185, 129, 0.3)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {t.challenge_completed ? <CheckCircle size={12} /> : null}
+                          <span>{t.challenge_completed ? 'Coding Challenge' : '💻 Coding Challenge'}</span>
+                        </Link>
+                      ) : (
+                        <span
+                          title="Complete Game Arena first to unlock"
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg-muted)',
+                            color: 'var(--text-muted)',
+                            opacity: 0.5,
+                            cursor: 'not-allowed',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid var(--border-subtle)'
+                          }}
+                        >
+                          <Lock size={12} />
+                          <span>Coding Challenge</span>
+                        </span>
+                      )}
+
+                      {/* Step 4: Assessment */}
+                      {isAssessmentUnlocked ? (
+                        <Link
+                          href={`/assess/${t.id}`}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: t.assessment_completed ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.1)',
+                            color: t.assessment_completed ? 'var(--color-accent-green)' : 'var(--color-accent-gold)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            border: t.assessment_completed ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          {t.assessment_completed ? <CheckCircle size={12} /> : null}
+                          <span>{t.assessment_completed ? 'Assessment' : '🧠 Assessment'}</span>
+                        </Link>
+                      ) : (
+                        <span
+                          title="Complete Coding Challenge first to unlock"
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: 'var(--radius-sm)',
+                            background: 'var(--bg-muted)',
+                            color: 'var(--text-muted)',
+                            opacity: 0.5,
+                            cursor: 'not-allowed',
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            border: '1px solid var(--border-subtle)'
+                          }}
+                        >
+                          <Lock size={12} />
+                          <span>Assessment</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           );
         })}
 
         {/* Grand Beginner Boss Battle Card */}
-        {bossInfo && (
-          <div
-            className="glass-panel"
-            style={{
-              padding: '32px',
-              border: '2px solid rgba(236, 72, 153, 0.4)',
-              background: 'linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(99, 102, 241, 0.1))',
-              position: 'relative'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
-              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-                <div style={{
-                  fontSize: '3rem',
-                  width: '74px',
-                  height: '74px',
-                  borderRadius: '20px',
-                  background: 'rgba(236, 72, 153, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 8px 24px rgba(236, 72, 153, 0.3)'
-                }}>
-                  {bossInfo.boss_avatar || '🐉'}
-                </div>
-                <div>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#ec4899', fontWeight: 700, fontSize: '0.85rem' }}>
-                    <Swords size={16} />
-                    <span>GRAND FINALE: BEGINNER BOSS BATTLE</span>
+        {bossInfo && (() => {
+          const allWorldsCompleted = worlds.length > 0 && worlds.every(w => w.is_completed);
+          return (
+            <div
+              className="glass-panel"
+              style={{
+                padding: '32px',
+                border: allWorldsCompleted ? '2px solid rgba(236, 72, 153, 0.4)' : '1px solid var(--border-subtle)',
+                background: allWorldsCompleted
+                  ? 'linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(99, 102, 241, 0.1))'
+                  : 'var(--bg-muted)',
+                position: 'relative',
+                opacity: allWorldsCompleted ? 1 : 0.65
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '20px' }}>
+                <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                  <div style={{
+                    fontSize: '3rem',
+                    width: '74px',
+                    height: '74px',
+                    borderRadius: '20px',
+                    background: allWorldsCompleted ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: allWorldsCompleted ? '0 8px 24px rgba(236, 72, 153, 0.3)' : 'none'
+                  }}>
+                    {bossInfo.boss_avatar || '🐉'}
                   </div>
-                  <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '4px 0' }}>
-                    {bossInfo.title}
-                  </h2>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '520px' }}>
-                    {bossInfo.storyline}
-                  </p>
+                  <div>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: allWorldsCompleted ? '#ec4899' : 'var(--text-muted)', fontWeight: 700, fontSize: '0.85rem' }}>
+                      <Swords size={16} />
+                      <span>GRAND FINALE: BEGINNER BOSS BATTLE</span>
+                      {!allWorldsCompleted && (
+                        <span className="badge badge-locked" style={{ marginLeft: '8px' }}>
+                          <Lock size={12} /> Locked
+                        </span>
+                      )}
+                    </div>
+                    <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '4px 0' }}>
+                      {bossInfo.title}
+                    </h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '520px' }}>
+                      {bossInfo.storyline}
+                    </p>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <Link
-                  href="/boss/world-7-functions"
-                  className="btn-primary"
-                  style={{
-                    background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
-                    padding: '14px 28px',
-                    fontSize: '1rem',
-                    boxShadow: '0 6px 20px rgba(236, 72, 153, 0.4)'
-                  }}
-                >
-                  <Swords size={18} />
-                  <span>Challenge Boss (+{bossInfo.xp_reward} XP)</span>
-                </Link>
+                <div>
+                  {allWorldsCompleted ? (
+                    <Link
+                      href="/boss/world-7-functions"
+                      className="btn-primary"
+                      style={{
+                        background: 'linear-gradient(135deg, #ec4899, #8b5cf6)',
+                        padding: '14px 28px',
+                        fontSize: '1rem',
+                        boxShadow: '0 6px 20px rgba(236, 72, 153, 0.4)'
+                      }}
+                    >
+                      <Swords size={18} />
+                      <span>Challenge Boss (+{bossInfo.xp_reward} XP)</span>
+                    </Link>
+                  ) : (
+                    <button
+                      disabled
+                      className="btn-secondary"
+                      style={{ padding: '12px 24px', fontSize: '0.9rem', opacity: 0.6, cursor: 'not-allowed', display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <Lock size={16} />
+                      <span>Locked (Complete All 7 Worlds)</span>
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

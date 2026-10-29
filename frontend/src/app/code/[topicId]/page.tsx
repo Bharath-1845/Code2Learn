@@ -5,8 +5,9 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { challengeApi, aiApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import confetti from 'canvas-confetti';
-import { Play, Check, Lightbulb, Sparkles, AlertCircle, CheckCircle, ArrowRight, Terminal } from 'lucide-react';
+import { Play, Check, Lightbulb, Sparkles, AlertCircle, CheckCircle, ArrowRight, Terminal, Lock } from 'lucide-react';
 
 // Dynamic import Monaco to avoid SSR issues
 const MonacoEditor = dynamic(() => import('@monaco-editor/react'), { ssr: false });
@@ -15,6 +16,7 @@ export default function CodeChallengePage() {
   const params = useParams();
   const router = useRouter();
   const topicId = params.topicId as string;
+  const { addXp } = useAuth();
 
   const [challenge, setChallenge] = useState<any>(null);
   const [code, setCode] = useState('');
@@ -32,18 +34,22 @@ export default function CodeChallengePage() {
   const [selectedConceptAnswer, setSelectedConceptAnswer] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [lockError, setLockError] = useState('');
 
   useEffect(() => {
     loadChallenge();
   }, [topicId]);
 
   const loadChallenge = async () => {
+    setLoading(true);
+    setLockError('');
     try {
       const c = await challengeApi.getChallenge(topicId);
       setChallenge(c);
       setCode(c.starter_code || '# Write your Python code here\n');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load challenge:', err);
+      setLockError(err.message || 'Coding challenge is locked. Complete the interactive game first!');
     } finally {
       setLoading(false);
     }
@@ -73,6 +79,9 @@ export default function CodeChallengePage() {
       setSubmitResult(res);
 
       if (res.passed) {
+        if (res.xp_earned && res.xp_earned > 0) {
+          addXp(res.xp_earned, res.new_level);
+        }
         confetti({
           particleCount: 100,
           spread: 70,
@@ -104,6 +113,22 @@ export default function CodeChallengePage() {
       <div className="container" style={{ textAlign: 'center', padding: '100px 0' }}>
         <div style={{ fontSize: '2.5rem', animation: 'pulseGlow 1.5s infinite' }}>💻</div>
         <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Loading Code Sandbox...</p>
+      </div>
+    );
+  }
+
+  if (lockError) {
+    return (
+      <div className="container" style={{ textAlign: 'center', padding: '80px 20px', maxWidth: '600px' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔒</div>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '10px' }}>Coding Challenge Locked</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+          {lockError}
+        </p>
+        <Link href={`/game/${topicId}`} className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span>Go to Interactive Game</span>
+          <ArrowRight size={18} />
+        </Link>
       </div>
     );
   }

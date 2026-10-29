@@ -82,3 +82,23 @@ async def toggle_user_status(
     user.is_active = not user.is_active
     await db.commit()
     return {"id": user.id, "is_active": user.is_active}
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db)
+):
+    if user_id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own active admin account.")
+
+    res = await db.execute(select(User).where(User.id == user_id))
+    target_user = res.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.delete(target_user)
+    await db.commit()
+    return {"status": "success", "message": f"User {target_user.username} deleted successfully"}
+

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 
 type Theme = 'dark' | 'light';
 
@@ -19,6 +19,7 @@ const ThemeContext = createContext<ThemeContextType>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<Theme>('dark');
   const [mounted, setMounted] = useState(false);
+  const transitionTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('c2l_theme') as Theme;
@@ -31,7 +32,27 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     setMounted(true);
   }, []);
 
+  const triggerSmoothTransition = () => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+
+    // Clear any pending timeout
+    if (transitionTimerRef.current) {
+      clearTimeout(transitionTimerRef.current);
+    }
+
+    // Add transitioning class
+    root.classList.add('theme-transitioning');
+
+    // Remove after the 400ms transition completes
+    transitionTimerRef.current = setTimeout(() => {
+      root.classList.remove('theme-transitioning');
+      transitionTimerRef.current = null;
+    }, 450);
+  };
+
   const setTheme = (newTheme: Theme) => {
+    triggerSmoothTransition();
     setThemeState(newTheme);
     localStorage.setItem('c2l_theme', newTheme);
     document.documentElement.setAttribute('data-theme', newTheme);

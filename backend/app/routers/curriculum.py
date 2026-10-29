@@ -10,7 +10,7 @@ from app.models.curriculum import Mode, World, Topic, Lesson, MiniPractice
 from app.models.progress import UserWorldProgress, UserTopicProgress
 from app.schemas.curriculum import ModeOut, WorldOut, TopicOut, LessonOut, MiniPracticeOut, MiniPracticeSubmit
 from app.routers.deps import get_current_user_optional, get_current_user
-from app.services.progression import award_xp, get_or_create_topic_progress, check_achievements
+from app.services.progression import award_xp, get_or_create_topic_progress, check_achievements, check_and_apply_topic_mastery
 
 router = APIRouter(prefix="/curriculum", tags=["curriculum"])
 
@@ -85,13 +85,63 @@ async def get_worlds(
         w_prog_res = await db.execute(
             select(UserWorldProgress).where(UserWorldProgress.user_id == current_user.id)
         )
-        for wp in w_prog_res.scalars().all():
-            if wp.is_unlocked:
-                unlocked_world_ids.add(wp.world_id)
-            if wp.is_completed:
-                completed_world_ids.add(wp.world_id)
+        existing_w_progs = {wp.world_id: wp for wp in w_prog_res.scalars().all()}
+
+        # Strict Sequential Progression:
+        # World 1 is unlocked by default.
+        # World N+1 unlocks IF AND ONLY IF World N is completed (all its topics mastered).
+        # Any subsequent world whose preceding world is not completed is strictly locked.
+        can_unlock_next = True
+
+        for idx, w in enumerate(worlds):
+            wp = existing_w_progs.get(w.id)
+            if not wp:
+                wp = UserWorldProgress(
+                    user_id=current_user.id,
+                    world_id=w.id,
+                    is_unlocked=False,
+                    is_completed=False,
+                    boss_defeated=False
+                )
+                db.add(wp)
+                existing_w_progs[w.id] = wp
+
+            if can_unlock_next:
+                unlocked_world_ids.add(w.id)
+                wp.is_unlocked = True
+
+                # Check if this unlocked world has all topics mastered
+                topics_res = await db.execute(select(Topic).where(Topic.world_id == w.id).order_by(Topic.order_index))
+                w_topics = topics_res.scalars().all()
+                if w_topics:
+                    t_ids = [t.id for t in w_topics]
+                    tp_res = await db.execute(
+                        select(UserTopicProgress).where(
+                            and_(UserTopicProgress.user_id == current_user.id, UserTopicProgress.topic_id.in_(t_ids))
+                        )
+                    )
+                    t_progs = tp_res.scalars().all()
+                    mastered_ids = {p.topic_id for p in t_progs if p.is_mastered}
+                    is_all_mastered = len(t_ids) > 0 and all(tid in mastered_ids for tid in t_ids)
+
+                    if is_all_mastered:
+                        completed_world_ids.add(w.id)
+                        wp.is_completed = True
+                        can_unlock_next = True
+                    else:
+                        wp.is_completed = False
+                        can_unlock_next = False
+                else:
+                    can_unlock_next = False
+            else:
+                # Preceding world is not completed yet; lock this world
+                wp.is_unlocked = False
+                wp.is_completed = False
+
             if wp.boss_defeated:
-                boss_defeated_world_ids.add(wp.world_id)
+                boss_defeated_world_ids.add(w.id)
+
+        await db.commit()
 
     out = []
     for w in worlds:
@@ -187,18 +237,22 @@ async def complete_lesson(
     db: AsyncSession = Depends(get_db)
 ):
     prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
-    xp_awarded = 0
     if not prog.lesson_completed:
         prog.lesson_completed = True
         xp_awarded = 20
-        prog.xp_earned += xp_awarded
-        await db.commit()
-        await award_xp(db, current_user.id, xp_awarded)
-        await check_achievements(db, current_user.id)
+    else:
+        xp_awarded = 5  # Review bonus
+    
+    prog.xp_earned += xp_awarded
+    await db.commit()
+    await award_xp(db, current_user.id, xp_awarded)
+    await check_and_apply_topic_mastery(db, current_user.id, topic_id)
+    await check_achievements(db, current_user.id)
 
     return {
         "status": "success",
         "lesson_completed": True,
+        "practice_completed": prog.practice_completed,
         "xp_awarded": xp_awarded
     }
 
@@ -264,10 +318,14 @@ async def submit_mini_practice(
         if not prog.practice_completed:
             prog.practice_completed = True
             xp_awarded = 20
-            prog.xp_earned += xp_awarded
-            await db.commit()
-            await award_xp(db, current_user.id, xp_awarded)
-            await check_achievements(db, current_user.id)
+        else:
+            xp_awarded = 10  # Practice retention bonus
+        
+        prog.xp_earned += xp_awarded
+        await db.commit()
+        await award_xp(db, current_user.id, xp_awarded)
+        await check_and_apply_topic_mastery(db, current_user.id, topic_id)
+        await check_achievements(db, current_user.id)
 
     return {
         "passed": all_passed,

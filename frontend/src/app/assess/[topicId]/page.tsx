@@ -4,19 +4,22 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { assessmentApi } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
 import confetti from 'canvas-confetti';
-import { Brain, CheckCircle, AlertCircle, ArrowRight, Clock, Award, RotateCcw } from 'lucide-react';
+import { Brain, CheckCircle, AlertCircle, ArrowRight, Clock, Award, RotateCcw, Lock } from 'lucide-react';
 
 export default function AssessmentPage() {
   const params = useParams();
   const router = useRouter();
   const topicId = params.topicId as string;
+  const { addXp } = useAuth();
 
   const [assessment, setAssessment] = useState<any>(null);
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [lockError, setLockError] = useState('');
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(600);
 
   useEffect(() => {
@@ -39,12 +42,15 @@ export default function AssessmentPage() {
   }, [loading, result]);
 
   const loadAssessment = async () => {
+    setLoading(true);
+    setLockError('');
     try {
       const a = await assessmentApi.getAssessment(topicId);
       setAssessment(a);
       setTimeLeftSeconds((a.time_limit_minutes || 10) * 60);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load assessment:', err);
+      setLockError(err.message || 'Assessment is locked. Complete the coding challenge first!');
     } finally {
       setLoading(false);
     }
@@ -66,6 +72,9 @@ export default function AssessmentPage() {
       setResult(res);
 
       if (res.passed) {
+        if (res.xp_earned && res.xp_earned > 0) {
+          addXp(res.xp_earned, res.new_level);
+        }
         confetti({
           particleCount: 100,
           spread: 80,
@@ -90,6 +99,22 @@ export default function AssessmentPage() {
       <div className="container" style={{ textAlign: 'center', padding: '100px 0' }}>
         <div style={{ fontSize: '2.5rem', animation: 'pulseGlow 1.5s infinite' }}>🧠</div>
         <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Preparing Adaptive Assessment...</p>
+      </div>
+    );
+  }
+
+  if (lockError) {
+    return (
+      <div className="container" style={{ textAlign: 'center', padding: '80px 20px', maxWidth: '600px' }}>
+        <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔒</div>
+        <h2 style={{ fontSize: '1.6rem', fontWeight: 800, marginBottom: '10px' }}>Assessment Locked</h2>
+        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+          {lockError}
+        </p>
+        <Link href={`/code/${topicId}`} className="btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <span>Go to Coding Challenge</span>
+          <ArrowRight size={18} />
+        </Link>
       </div>
     );
   }
@@ -264,6 +289,48 @@ export default function AssessmentPage() {
               </div>
             ))}
           </div>
+
+          {/* Next World / Next Topic Unlocked Banner */}
+          {result.passed && (result.next_unlocked_world_id || result.next_unlocked_topic_id) && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(99, 102, 241, 0.15))',
+              border: '2px solid #10b981',
+              borderRadius: 'var(--radius-md)',
+              padding: '24px',
+              marginBottom: '32px',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#10b981', marginBottom: '6px' }}>
+                {result.next_unlocked_world_id ? '🎉 World Completed & Next World Unlocked!' : '🔓 Next Level Unlocked!'}
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '18px' }}>
+                {result.next_unlocked_world_id
+                  ? 'Congratulations! You have mastered this world. The next world is now automatically unlocked on your world map!'
+                  : 'Great job! You have unlocked the next topic in your learning journey.'}
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {result.next_unlocked_topic_id ? (
+                  <Link
+                    href={`/learn/${result.next_unlocked_topic_id}`}
+                    className="btn-primary"
+                    style={{ padding: '12px 28px', background: '#10b981' }}
+                  >
+                    <span>Enter Next Level Now</span>
+                    <ArrowRight size={18} />
+                  </Link>
+                ) : (
+                  <Link
+                    href="/worlds"
+                    className="btn-primary"
+                    style={{ padding: '12px 28px', background: '#10b981' }}
+                  >
+                    <span>Go to World Map</span>
+                    <ArrowRight size={18} />
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', flexWrap: 'wrap' }}>

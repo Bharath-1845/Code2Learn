@@ -4,13 +4,15 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { curriculumApi } from '@/lib/api';
-import { BookOpen, CheckCircle, ArrowRight, Sparkles, HelpCircle, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
+import { BookOpen, CheckCircle, ArrowRight, Sparkles, HelpCircle, AlertCircle, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function LessonPage() {
   const params = useParams();
   const router = useRouter();
   const topicId = params.topicId as string;
+  const { addXp } = useAuth();
 
   const [lesson, setLesson] = useState<any>(null);
   const [practices, setPractices] = useState<any[]>([]);
@@ -33,8 +35,15 @@ export default function LessonPage() {
       ]);
       setLesson(les);
       setPractices(pracs);
-      // Mark lesson as completed in background
-      curriculumApi.completeLesson(topicId).catch(() => {});
+      // Mark lesson as completed and check if practice was already passed
+      curriculumApi.completeLesson(topicId).then((res) => {
+        if (res?.practice_completed) {
+          setPracticePassed(true);
+        }
+        if (res?.xp_awarded && res.xp_awarded > 0) {
+          addXp(res.xp_awarded);
+        }
+      }).catch(() => {});
     } catch (err) {
       console.error('Failed to load lesson:', err);
     } finally {
@@ -55,6 +64,9 @@ export default function LessonPage() {
       setXpAwarded(res.xp_awarded || 0);
 
       if (res.passed) {
+        if (res.xp_awarded && res.xp_awarded > 0) {
+          addXp(res.xp_awarded);
+        }
         confetti({
           particleCount: 50,
           spread: 60,
@@ -84,11 +96,17 @@ export default function LessonPage() {
         <Link href="/worlds" style={{ fontSize: '0.9rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '6px' }}>
           ← Back to World Map
         </Link>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <span className="badge badge-xp">Step 1: Learn & Practice</span>
-          <Link href={`/game/${topicId}`} className="badge badge-success" style={{ textDecoration: 'none' }}>
-            Next: Play Game 🎮
-          </Link>
+          {practicePassed || practices.length === 0 ? (
+            <Link href={`/game/${topicId}`} className="badge badge-success" style={{ textDecoration: 'none' }}>
+              Next: Play Game 🎮
+            </Link>
+          ) : (
+            <span className="badge badge-locked" style={{ opacity: 0.6, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              <Lock size={12} /> Next: Game Locked
+            </span>
+          )}
         </div>
       </div>
 

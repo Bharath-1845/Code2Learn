@@ -89,6 +89,34 @@ body {
   background-attachment: fixed;
 }
 
+/* Smooth Global Theme Transition */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              fill 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              stroke 0.4s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  transition-delay: 0s !important;
+}
+
+nav,
+header,
+footer,
+.glass-panel,
+.btn-secondary,
+input,
+select,
+textarea {
+  transition: background-color var(--transition-normal),
+              border-color var(--transition-normal),
+              color var(--transition-normal),
+              box-shadow var(--transition-normal);
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -222,3 +250,182 @@ button {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+/* Theme Toggle Micro-Interactions */
+.theme-toggle-btn {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color var(--transition-normal),
+              border-color var(--transition-normal),
+              box-shadow 0.25s ease;
+}
+
+.theme-toggle-btn:hover {
+  transform: scale(1.06);
+  border-color: var(--border-focus);
+}
+
+[data-theme='dark'] .theme-toggle-btn:hover {
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.25);
+}
+
+[data-theme='light'] .theme-toggle-btn:hover {
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.25);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.92);
+}
+
+.theme-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.theme-toggle-btn:hover .theme-icon-wrapper {
+  transform: rotate(25deg);
+}
+
+/* ==========================================================================
+   Modern Auth & Form Enhancements
+   ========================================================================== */
+
+/* WebKit Autocomplete Dark Theme Reset (Fixes ugly light-blue autofill box) */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #131b2e inset !important;
+  -webkit-text-fill-color: #f8fafc !important;
+  caret-color: #f8fafc !important;
+  transition: background-color 5000s ease-in-out 0s;
+  border-radius: inherit;
+}
+
+[data-theme='light'] input:-webkit-autofill,
+[data-theme='light'] input:-webkit-autofill:hover, 
+[data-theme='light'] input:-webkit-autofill:focus, 
+[data-theme='light'] input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #f1f5f9 inset !important;
+  -webkit-text-fill-color: #0f172a !important;
+  caret-color: #0f172a !important;
+}
+
+/* Modern Auth Form Glass Card */
+.auth-glass-card {
+  background: rgba(17, 24, 39, 0.75);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 24px 60px -12px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 0 50px -10px rgba(99, 102, 241, 0.12);
+  border-radius: 24px;
+  position: relative;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+}
+
+[data-theme='light'] .auth-glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  box-shadow: 
+    0 20px 48px -12px rgba(99, 102, 241, 0.12),
+    0 4px 16px rgba(0, 0, 0, 0.04);
+}
+
+/* Auth Input Container */
+.auth-input-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 12px 16px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.auth-input-container:focus-within {
+  border-color: var(--color-primary);
+  background: rgba(99, 102, 241, 0.05);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18), 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.auth-input-container input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-main);
+  font-size: 0.95rem;
+  font-family: inherit;
+  font-weight: 500;
+}
+
+.auth-input-container input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Ambient Radial Mesh Background */
+.auth-ambient-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.45;
+}
+
+/* Gradient Action Button */
+.btn-auth-submit {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #4338ca 100%);
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 8px 24px -4px rgba(99, 102, 241, 0.45), 0 2px 6px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-auth-submit:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -4px rgba(99, 102, 241, 0.6), 0 4px 10px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(135deg, #6d70f5 0%, #574fe7 50%, #4a3fd8 100%);
+}
+
+.btn-auth-submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-auth-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+

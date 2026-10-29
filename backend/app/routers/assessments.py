@@ -35,6 +35,14 @@ async def get_assessment_for_topic(
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found for this topic")
 
+    # Strict prerequisite: Coding challenge must be completed before assessment
+    prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
+    if not prog.challenge_completed:
+        raise HTTPException(
+            status_code=403,
+            detail="You must complete the coding challenge before unlocking the assessment."
+        )
+
     questions = await get_adaptive_questions_for_topic(db, topic_id, current_user.id, max_questions=5)
 
     q_out = []
@@ -76,6 +84,14 @@ async def submit_assessment(
     assessment = res.scalar_one_or_none()
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Strict prerequisite: Coding challenge must be completed
+    prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
+    if not prog.challenge_completed:
+        raise HTTPException(
+            status_code=403,
+            detail="You must complete the coding challenge before submitting the assessment."
+        )
 
     # Map answers
     user_answers = {item.question_id: item.answer for item in data.answers}
@@ -136,13 +152,13 @@ async def submit_assessment(
 
     if passed:
         prog = await get_or_create_topic_progress(db, current_user.id, topic_id)
-        prog.assessment_completed = True
-        prog.assessment_score = score_ratio
+        if not prog.assessment_completed:
+            prog.assessment_completed = True
+            xp_earned = assessment.xp_reward or 100
+        else:
+            xp_earned = 30  # Quiz review mastery bonus
 
-        if prog.assessment_score > (prog.assessment_score or 0.0):
-            prog.assessment_score = score_ratio
-
-        xp_earned = assessment.xp_reward
+        prog.assessment_score = max(prog.assessment_score or 0.0, score_ratio)
         prog.xp_earned += xp_earned
         await db.commit()
 

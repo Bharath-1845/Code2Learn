@@ -136,17 +136,18 @@ export function Navbar() {
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
-                  background: 'var(--bg-muted)',
-                  padding: '6px 12px',
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  padding: '6px 14px',
                   borderRadius: 'var(--radius-full)',
-                  border: '1px solid var(--border-subtle)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
                   fontSize: '0.85rem',
-                  fontWeight: 600
+                  fontWeight: 600,
+                  transition: 'all 0.3s ease'
                 }}
               >
                 <span>{user.profile?.avatar || '🐍'}</span>
                 <span>Lvl {user.profile?.level || 1}</span>
-                <span style={{ color: 'var(--color-accent-gold)' }}>★ {user.profile?.xp || 0} XP</span>
+                <span style={{ color: 'var(--color-accent-gold)', fontWeight: 700 }}>★ {user.profile?.xp ?? 0} XP</span>
               </div>
 
               {/* User Dropdown / Logout */}
@@ -180,21 +181,17 @@ export function Navbar() {
           {/* Theme Toggle Button */}
           <button
             onClick={toggleTheme}
-            style={{
-              width: '38px',
-              height: '38px',
-              borderRadius: 'var(--radius-sm)',
-              background: 'var(--bg-muted)',
-              border: '1px solid var(--border-subtle)',
-              color: 'var(--text-main)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'background var(--transition-fast)'
-            }}
+            className="theme-toggle-btn"
             title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
+            aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
           >
-            {theme === 'dark' ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#6366f1" />}
+            <div className="theme-icon-wrapper">
+              {theme === 'dark' ? (
+                <Sun size={19} color="#f59e0b" style={{ filter: 'drop-shadow(0 0 4px rgba(245, 158, 11, 0.5))' }} />
+              ) : (
+                <Moon size={19} color="#6366f1" style={{ filter: 'drop-shadow(0 0 4px rgba(99, 102, 241, 0.5))' }} />
+              )}
+            </div>
           </button>
         </div>
       </div>

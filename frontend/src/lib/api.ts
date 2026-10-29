@@ -110,4 +110,5 @@ export const adminApi = {
   getStats: () => apiRequest('/admin/stats'),
   getUsers: () => apiRequest('/admin/users'),
   toggleUser: (userId: string) => apiRequest(`/admin/users/${userId}/status`, { method: 'POST' }),
+  deleteUser: (userId: string) => apiRequest(`/admin/users/${userId}`, { method: 'DELETE' }),
 };

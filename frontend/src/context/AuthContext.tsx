@@ -29,6 +29,7 @@ interface AuthContextType {
   login: (token: string, refreshToken: string, userData: any) => void;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  addXp: (amount: number, newLevel?: number) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
   login: () => {},
   logout: () => {},
   refreshUser: async () => {},
+  addXp: () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -64,6 +66,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const addXp = (amount: number, newLevel?: number) => {
+    if (amount <= 0) return;
+    setUser((prev) => {
+      if (!prev) return prev;
+      const currentXp = prev.profile?.xp || 0;
+      const currentLevel = prev.profile?.level || 1;
+      return {
+        ...prev,
+        profile: {
+          ...(prev.profile as any),
+          xp: currentXp + amount,
+          level: newLevel || currentLevel,
+        }
+      };
+    });
+    // Immediately sync in background with server
+    refreshUser().catch(() => {});
+  };
+
   useEffect(() => {
     refreshUser();
   }, []);
@@ -83,7 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser, addXp }}>
       {children}
     </AuthContext.Provider>
   );
